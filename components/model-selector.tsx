@@ -1,7 +1,7 @@
 "use client";
 
 import type { Session } from "next-auth";
-import { startTransition, useMemo, useOptimistic, useState } from "react";
+import { startTransition, useEffect, useMemo, useOptimistic, useState } from "react";
 import { saveChatModelAsCookie } from "@/app/(chat)/actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +26,11 @@ export function ModelSelector({
   const [open, setOpen] = useState(false);
   const [optimisticModelId, setOptimisticModelId] =
     useOptimistic(selectedModelId);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   const userType = session.user.type;
   const { availableChatModelIds } = entitlementsByUserType[userType];
@@ -41,6 +46,23 @@ export function ModelSelector({
       ),
     [optimisticModelId, availableChatModels]
   );
+
+  if (!isHydrated) {
+    // Render a placeholder that matches server-side rendering exactly
+    return (
+      <Button
+        className={cn(
+          "w-fit md:h-[34px] md:px-2",
+          className
+        )}
+        data-testid="model-selector"
+        variant="outline"
+        disabled
+      >
+        <ChevronDownIcon />
+      </Button>
+    );
+  }
 
   return (
     <DropdownMenu onOpenChange={setOpen} open={open}>

@@ -105,9 +105,14 @@ function PureMultimodalInput({
     "input",
     ""
   );
+  const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    if (textareaRef.current) {
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (isHydrated && textareaRef.current) {
       const domValue = textareaRef.current.value;
       // Prefer DOM value over localStorage to handle hydration
       const finalValue = domValue || localStorageInput || "";
@@ -116,7 +121,7 @@ function PureMultimodalInput({
     }
     // Only run once after hydration
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adjustHeight, localStorageInput, setInput]);
+  }, [adjustHeight, localStorageInput, setInput, isHydrated]);
 
   useEffect(() => {
     setLocalStorageInput(input);
@@ -233,7 +238,7 @@ function PureMultimodalInput({
   );
 
   return (
-    <div className={cn("relative flex w-full flex-col gap-4", className)}>
+    <div className={cn("relative flex w-full flex-col gap-4", className)} suppressHydrationWarning>
       {messages.length === 0 &&
         attachments.length === 0 &&
         uploadQueue.length === 0 && (
@@ -263,6 +268,7 @@ function PureMultimodalInput({
             submitForm();
           }
         }}
+        suppressHydrationWarning
       >
         {(attachments.length > 0 || uploadQueue.length > 0) && (
           <div
@@ -309,7 +315,8 @@ function PureMultimodalInput({
             placeholder="Send a message..."
             ref={textareaRef}
             rows={1}
-            value={input}
+            value={isHydrated ? input : ""}
+            suppressHydrationWarning
           />{" "}
           <Context {...contextProps} />
         </div>
@@ -403,6 +410,11 @@ function PureModelSelectorCompact({
   onModelChange?: (modelId: string) => void;
 }) {
   const [optimisticModelId, setOptimisticModelId] = useState(selectedModelId);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   useEffect(() => {
     setOptimisticModelId(selectedModelId);
@@ -411,6 +423,17 @@ function PureModelSelectorCompact({
   const selectedModel = chatModels.find(
     (model) => model.id === optimisticModelId
   );
+
+  if (!isHydrated) {
+    // Render a placeholder that matches server-side rendering exactly
+    return (
+      <div className="flex h-8 items-center gap-2 rounded-lg border-0 bg-background px-2 text-foreground shadow-none transition-colors hover:bg-accent focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0">
+        <CpuIcon size={16} />
+        <span className="hidden font-medium text-xs sm:block"></span>
+        <ChevronDownIcon size={16} />
+      </div>
+    );
+  }
 
   return (
     <PromptInputModelSelect
