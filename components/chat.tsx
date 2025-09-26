@@ -30,6 +30,7 @@ import { useDataStream } from "./data-stream-provider";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
 import { getChatHistoryPaginationKey } from "./sidebar-history";
+import { LevelSelector } from "./level-selector";
 import { toast } from "./toast";
 import type { VisibilityType } from "./visibility-selector";
 
@@ -63,10 +64,86 @@ export function Chat({
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
   const [currentModelId, setCurrentModelId] = useState(initialChatModel);
   const currentModelIdRef = useRef(currentModelId);
+  // Shared levels data and state
+  const [levels, setLevels] = useState<{ id: string; name: string; difficulty?: string }[]>([]);
+  const [isLoadingLevels, setIsLoadingLevels] = useState(false);
+  const [levelsError, setLevelsError] = useState<string | null>(null);
+  const [selectedLevel, setSelectedLevel] = useState<{ id: string; name: string; difficulty?: string } | undefined>();
+  const [objective, setObjective] = useState<string>("");
 
   useEffect(() => {
     currentModelIdRef.current = currentModelId;
   }, [currentModelId]);
+
+  // Fetch levels data once on component mount
+  useEffect(() => {
+    const fetchLevels = async () => {
+      setIsLoadingLevels(true);
+      setLevelsError(null);
+      
+      try {
+        const response = await fetch('/api/levels');
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('API Error response:', errorText);
+          throw new Error(`Failed to fetch levels: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        
+        // Handle different possible response formats
+        let levelsData = [];
+        if (Array.isArray(data)) {
+          levelsData = data;
+        } else if (data.levels && Array.isArray(data.levels)) {
+          levelsData = data.levels;
+        } else if (data.data && Array.isArray(data.data)) {
+          levelsData = data.data;
+        } else {
+          throw new Error("Invalid response format: expected array of levels");
+        }
+
+        // Ensure each level has required properties
+        const formattedLevels = levelsData.map((level: any, index: number) => ({
+          id: level.id || level._id || `level-${index}`,
+          name: level.name || level.title || `Level ${index + 1}`,
+          difficulty: level.difficulty || level.level || undefined,
+          objective: level.objective || level.description || undefined,
+        }));
+
+        setLevels(formattedLevels);
+        
+        // Auto-select first level if available
+        if (formattedLevels.length > 0 && !selectedLevel) {
+          setSelectedLevel(formattedLevels[0]);
+        }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Failed to fetch levels";
+        setLevelsError(errorMessage);
+        console.error("Error fetching levels:", err);
+      } finally {
+        setIsLoadingLevels(false);
+      }
+    };
+
+    fetchLevels();
+  }, []);
+
+  // Update objective when selectedLevel changes
+  useEffect(() => {
+    if (!selectedLevel) {
+      setObjective("");
+      return;
+    }
+
+    const currentLevel = levels.find(level => level.id === selectedLevel.id);
+    if (currentLevel && (currentLevel as any).objective) {
+      setObjective((currentLevel as any).objective);
+    } else {
+      setObjective("No objective available for this level");
+    }
+  }, [selectedLevel, levels]);
 
   const {
     messages,
@@ -162,7 +239,39 @@ export function Chat({
           isReadonly={isReadonly}
           selectedVisibilityType={initialVisibilityType}
         />
-
+        <div className="flex w-full flex-col px-4 py-2 gap-8 justify-center items-center">
+          <div className="w-full flex justify-center">
+            <LevelSelector
+              onLevelSelect={setSelectedLevel}
+              selectedLevel={selectedLevel}
+              className="w-full max-w-xs"
+              levels={levels}
+              isLoading={isLoadingLevels}
+              error={levelsError}
+            />
+          </div>
+          <div className="text-center text-sm bg-neutral-900 text-white rounded-full px-4 py-2">
+           {selectedLevel?.name}
+          </div>
+        <div className="flex flex-col min-w-0 max-w-4xl px-4 py-2 gap-4 text-center items-center">
+          <div className="w-full text-base font-bold flex justify-center">
+            Objective
+          </div>
+          <div className="w-full flex justify-center">
+            {isLoadingLevels ? (
+              <div className="text-sm text-muted-foreground">Loading objective...</div>
+            ) : levelsError ? (
+              <div className="text-sm text-red-500">{levelsError}</div>
+            ) : objective ? (
+              <div className="text-sm text-center max-w-2xl px-4">
+                {objective}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">Select a level to see the objective</div>
+            )}
+          </div>
+        </div>
+        </div>
         <Messages
           chatId={id}
           isArtifactVisible={isArtifactVisible}
