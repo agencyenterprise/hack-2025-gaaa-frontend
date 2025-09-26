@@ -13,7 +13,12 @@ CREATE TABLE IF NOT EXISTS "Vote" (
 	CONSTRAINT "Vote_chatId_messageId_pk" PRIMARY KEY("chatId","messageId")
 );
 --> statement-breakpoint
-ALTER TABLE "Chat" ADD COLUMN "title" text NOT NULL;--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "Chat" ADD COLUMN "title" text NOT NULL;
+EXCEPTION
+ WHEN duplicate_column THEN null;
+END $$;
+--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "Message" ADD CONSTRAINT "Message_chatId_Chat_id_fk" FOREIGN KEY ("chatId") REFERENCES "public"."Chat"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
