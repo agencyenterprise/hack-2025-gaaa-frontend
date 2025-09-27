@@ -11,10 +11,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log(`Proxying request to: ${apiUrl}/api/v1/games/password`);
+    const gameName = request.nextUrl.searchParams.get('gameName');
+    if (!gameName) {
+      console.error('gameName is not configured');
+      return NextResponse.json(
+        { error: 'gameName is not configured' },
+        { status: 500 }
+      );
+    }
+
 
     // Make the request to the external API from the server
-    const response = await fetch(`${apiUrl}/api/v1/games/password`, {
+    const response = await fetch(`${apiUrl}/api/v1/games/${gameName}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

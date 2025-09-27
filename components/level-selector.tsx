@@ -17,6 +17,7 @@ interface Level {
 }
 
 interface LevelSelectorProps {
+  gameName: string;
   onLevelSelect: (level: Level) => void;
   selectedLevel?: Level;
   className?: string;
@@ -26,6 +27,7 @@ interface LevelSelectorProps {
 }
 
 export function LevelSelector({ 
+  gameName,
   onLevelSelect, 
   selectedLevel, 
   className, 
@@ -51,7 +53,7 @@ export function LevelSelector({
       setLocalError(null);
       
       try {
-        const response = await fetch('/api/levels');
+        const response = await fetch(`/api/levels?gameName=${gameName}`);
         
         if (!response.ok) {
           const errorText = await response.text();

@@ -31,6 +31,7 @@ import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
 import { getChatHistoryPaginationKey } from "./sidebar-history";
 import { LevelSelector } from "./level-selector";
+import { GameSelector } from "./game-selector";
 import { toast } from "./toast";
 import type { VisibilityType } from "./visibility-selector";
 
@@ -66,17 +67,55 @@ export function Chat({
   const currentModelIdRef = useRef(currentModelId);
   // Shared levels data and state
   const [levelsData, setLevelsData] = useState<{ id: string; name: string; difficulty?: string }[]>([]);
+  const [gamesData, setGamesData] = useState<{ name: string; description: string; endpoint: string }[]>([]);
   const [isLoadingLevels, setIsLoadingLevels] = useState(false);
+  const [isLoadingGames, setIsLoadingGames] = useState(false);
   const [levelsError, setLevelsError] = useState<string | null>(null);
+  const [gamesError, setGamesError] = useState<string | null>(null);
 
   // Memoize the levels array to prevent unnecessary re-renders
   const levels = useMemo(() => levelsData, [levelsData]);
+  const games = useMemo(() => gamesData, [gamesData]);
+  const [selectedGame, setSelectedGame] = useState<{ name: string; description: string; endpoint: string } | undefined>(undefined);
   const [selectedLevel, setSelectedLevel] = useState<{ id: string; name: string; difficulty?: string; userObjective?: string } | undefined>();
-  const [userObjective, setUserObjective] = useState<string | null>(null);
-
+  
   useEffect(() => {
     currentModelIdRef.current = currentModelId;
   }, [currentModelId]);
+
+  // Fetch levels data once on component mount
+  useEffect(() => {
+    const fetchGames = async () => {
+      setIsLoadingGames(true);
+      setGamesError(null);
+      
+      try {
+        const response = await fetch('/api/games');
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('API Error response:', errorText);
+          throw new Error(`Failed to fetch games: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log('API response data:', data);
+
+        // Handle different possible response formats
+        let gamesData = data.games;
+        setGamesData(gamesData);
+       
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Failed to fetch levels";
+        setGamesError(errorMessage);
+        console.error("Error fetching levels:", err);
+      } finally {
+        setIsLoadingGames(false);
+      }
+    };
+
+    fetchGames();
+  }, []);
 
   // Fetch levels data once on component mount
   useEffect(() => {
@@ -85,7 +124,7 @@ export function Chat({
       setLevelsError(null);
       
       try {
-        const response = await fetch('/api/levels');
+        const response = await fetch(`/api/levels?gameName=${selectedGame?.name}`);
         
         if (!response.ok) {
           const errorText = await response.text();
@@ -98,19 +137,6 @@ export function Chat({
 
         // Handle different possible response formats
         let levelsData = data.levels;
-
-        // Store the user objective for later use
-        if (data.userObjective) {
-          console.log('User objective received:', userObjective);
-          setUserObjective(userObjective);
-
-          // Update the currently selected level with the user objective
-          if (selectedLevel) {
-            setSelectedLevel(prev => prev ? { ...prev, userObjective: data.userObjective } : undefined);
-          }
-        } else {
-          console.log('No user objective found in API response');
-        }
 
         // Ensure each level has required properties
         const formattedLevels = levelsData.map((level: any, index: number) => ({
@@ -127,8 +153,8 @@ export function Chat({
           const firstLevel = formattedLevels[0];
           console.log('Auto-selecting level:', firstLevel.name, 'with userObjective:', firstLevel.userObjective);
           setSelectedLevel(firstLevel);
-          setUserObjective(firstLevel.userObjective);
         }
+
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Failed to fetch levels";
         setLevelsError(errorMessage);
@@ -139,17 +165,7 @@ export function Chat({
     };
 
     fetchLevels();
-  }, []);
-
-  // Update objective when selectedLevel changes
-  useEffect(() => {
-    console.log('Objective useEffect triggered:', { selectedLevel: selectedLevel?.name, userObjective});
-    if (!selectedLevel) {
-      setUserObjective("");
-      return;
-    }
-    setUserObjective(selectedLevel.userObjective || "");
-  }, [selectedLevel, userObjective]);
+  }, [selectedGame]);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const sendMessage = async(message?: any) => {
@@ -176,7 +192,7 @@ export function Chat({
         history,
         message: messageText,
         levelId: selectedLevel?.id,
-        game: 'password',
+        game: selectedGame?.name,
       }),
     });
     const newMessageIndex = history.length + 1
@@ -201,14 +217,8 @@ export function Chat({
     // passed?
 
     if (data.passed) {
-      console.log(levels)
-      console.log(data.levelId)
-      console.log(levels[1])
       const nextLevelIndex = parseInt(selectedLevel?.id || '0')
-      console.log(nextLevelIndex)
-      console.log(levels?.[nextLevelIndex])
       const nextLevel = levels?.[nextLevelIndex];
-      console.log('nextLevel', nextLevel);
       // open modal with data.pass_rationale
       
       setTimeout(()=>{
@@ -228,23 +238,13 @@ export function Chat({
   const searchParams = useSearchParams();
   const query = searchParams.get("query");
 
-  const [hasAppendedQuery, setHasAppendedQuery] = useState(false);
-
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
 
   // Handler for level selection that includes userObjective
   const handleLevelSelect = useCallback((level: { id: string; name: string; difficulty?: string }) => {
-    setSelectedLevel({
-      ...level,
-      userObjective: userObjective || undefined
-    });
-
-    // Also set the objective directly if userObjective is available
-    if (userObjective) {
-      setUserObjective(userObjective);
-    }
-  }, [userObjective]);
+    setSelectedLevel(level);
+  }, []);
 
 
   return (
@@ -257,14 +257,27 @@ export function Chat({
         />
         <div className="flex w-full flex-col px-4 py-2 gap-8 justify-center items-center">
           <div className="w-full flex justify-center">
-            <LevelSelector
-              onLevelSelect={handleLevelSelect}
-              selectedLevel={selectedLevel}
+            <GameSelector
+              games={games}
+              onGameSelect={(game)=>{setSelectedGame(game); setSelectedLevel(undefined)}}
+              selectedGame={selectedGame}
               className="w-full max-w-xs"
-              levels={levels}
-              isLoading={isLoadingLevels}
-              error={levelsError}
+              isLoading={isLoadingGames}
+              error={gamesError}
             />
+          </div>
+          <div className="w-full flex justify-center">
+            {selectedGame && 
+              <LevelSelector
+                gameName={selectedGame.name}
+                onLevelSelect={handleLevelSelect}
+                selectedLevel={selectedLevel}
+                className="w-full max-w-xs"
+                levels={levels}
+                isLoading={isLoadingLevels}
+                error={levelsError}
+              />
+            }
           </div>
           <div className="text-center text-sm bg-neutral-900 text-white rounded-full px-4 py-2" data-testid="selected-level-name">
            {selectedLevel?.name}
