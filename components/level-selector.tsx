@@ -176,7 +176,7 @@ export function LevelSelector({
               <span className="sr-only">Show level information</span>
             </Button>
           </SheetTrigger>
-          <SheetContent side="right" className="w-[500px] md:w-[640px]">
+          <SheetContent side="right" className="w-full md:w-[640px]">
             <SheetHeader>
               <SheetTitle>{selectedLevel.name}</SheetTitle>
               <SheetDescription>
