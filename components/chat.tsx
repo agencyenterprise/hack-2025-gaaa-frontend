@@ -1,9 +1,9 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import { DefaultChatTransport, UIMessage } from "ai";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import { ChatHeader } from "@/components/chat-header";
@@ -65,11 +65,14 @@ export function Chat({
   const [currentModelId, setCurrentModelId] = useState(initialChatModel);
   const currentModelIdRef = useRef(currentModelId);
   // Shared levels data and state
-  const [levels, setLevels] = useState<{ id: string; name: string; difficulty?: string }[]>([]);
+  const [levelsData, setLevelsData] = useState<{ id: string; name: string; difficulty?: string }[]>([]);
   const [isLoadingLevels, setIsLoadingLevels] = useState(false);
   const [levelsError, setLevelsError] = useState<string | null>(null);
-  const [selectedLevel, setSelectedLevel] = useState<{ id: string; name: string; difficulty?: string } | undefined>();
-  const [objective, setObjective] = useState<string>("");
+
+  // Memoize the levels array to prevent unnecessary re-renders
+  const levels = useMemo(() => levelsData, [levelsData]);
+  const [selectedLevel, setSelectedLevel] = useState<{ id: string; name: string; difficulty?: string; userObjective?: string } | undefined>();
+  const [userObjective, setUserObjective] = useState<string | null>(null);
 
   useEffect(() => {
     currentModelIdRef.current = currentModelId;
@@ -91,17 +94,22 @@ export function Chat({
         }
 
         const data = await response.json();
-        
+        console.log('API response data:', data);
+
         // Handle different possible response formats
-        let levelsData = [];
-        if (Array.isArray(data)) {
-          levelsData = data;
-        } else if (data.levels && Array.isArray(data.levels)) {
-          levelsData = data.levels;
-        } else if (data.data && Array.isArray(data.data)) {
-          levelsData = data.data;
+        let levelsData = data.levels;
+
+        // Store the user objective for later use
+        if (data.userObjective) {
+          console.log('User objective received:', userObjective);
+          setUserObjective(userObjective);
+
+          // Update the currently selected level with the user objective
+          if (selectedLevel) {
+            setSelectedLevel(prev => prev ? { ...prev, userObjective: data.userObjective } : undefined);
+          }
         } else {
-          throw new Error("Invalid response format: expected array of levels");
+          console.log('No user objective found in API response');
         }
 
         // Ensure each level has required properties
@@ -109,14 +117,17 @@ export function Chat({
           id: level.id || level._id || `level-${index}`,
           name: level.name || level.title || `Level ${index + 1}`,
           difficulty: level.difficulty || level.level || undefined,
-          objective: level.objective || level.description || undefined,
+          userObjective: level.userObjective || level.description || undefined,
         }));
 
-        setLevels(formattedLevels);
-        
+        setLevelsData(formattedLevels);
+        console.log('Formatted levels:', formattedLevels);
         // Auto-select first level if available
         if (formattedLevels.length > 0 && !selectedLevel) {
-          setSelectedLevel(formattedLevels[0]);
+          const firstLevel = formattedLevels[0];
+          console.log('Auto-selecting level:', firstLevel.name, 'with userObjective:', firstLevel.userObjective);
+          setSelectedLevel(firstLevel);
+          setUserObjective(firstLevel.userObjective);
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Failed to fetch levels";
@@ -132,104 +143,109 @@ export function Chat({
 
   // Update objective when selectedLevel changes
   useEffect(() => {
+    console.log('Objective useEffect triggered:', { selectedLevel: selectedLevel?.name, userObjective});
     if (!selectedLevel) {
-      setObjective("");
+      setUserObjective("");
       return;
     }
+    setUserObjective(selectedLevel.userObjective || "");
+  }, [selectedLevel, userObjective]);
 
-    const currentLevel = levels.find(level => level.id === selectedLevel.id);
-    if (currentLevel && (currentLevel as any).objective) {
-      setObjective((currentLevel as any).objective);
-    } else {
-      setObjective("No objective available for this level");
-    }
-  }, [selectedLevel, levels]);
-
-  const {
-    messages,
-    setMessages,
-    sendMessage,
-    status,
-    stop,
-    regenerate,
-    resumeStream,
-  } = useChat<ChatMessage>({
-    id,
-    messages: initialMessages,
-    experimental_throttle: 100,
-    generateId: generateUUID,
-    transport: new DefaultChatTransport({
-      api: "/api/chat",
-      fetch: fetchWithErrorHandlers,
-      prepareSendMessagesRequest(request) {
-        return {
-          body: {
-            id: request.id,
-            message: request.messages.at(-1),
-            selectedChatModel: currentModelIdRef.current,
-            selectedVisibilityType: visibilityType,
-            ...request.body,
-          },
-        };
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const sendMessage = async(message?: any) => {
+    const messageText = message.parts[0].text;
+    const chatMessage:ChatMessage = {
+      id: generateUUID(),
+      role: message.role,
+      parts: [{ type: "text", text: messageText }],
+      metadata: {
+        createdAt: new Date().toISOString(),
       },
-    }),
-    onData: (dataPart) => {
-      setDataStream((ds) => (ds ? [...ds, dataPart] : []));
-      if (dataPart.type === "data-usage") {
-        setUsage(dataPart.data);
-      }
-    },
-    onFinish: () => {
-      mutate(unstable_serialize(getChatHistoryPaginationKey));
-    },
-    onError: (error) => {
-      if (error instanceof ChatSDKError) {
-        // Check if it's a credit card error
-        if (
-          error.message?.includes("AI Gateway requires a valid credit card")
-        ) {
-          setShowCreditCardAlert(true);
-        } else {
-          toast({
-            type: "error",
-            description: error.message,
-          });
+    };
+    setMessages([...messages, chatMessage]);
+
+    const history = messages.map((message) => ({
+      id: message.id,
+      content: (message as any).parts[0].text || '',
+      role: message.role,
+    }));
+    const response = await fetch('/api/chat/', {
+      method: 'POST',
+      body: JSON.stringify({
+        id,
+        history,
+        message: messageText,
+        levelId: selectedLevel?.id,
+        game: 'password',
+      }),
+    });
+    const newMessageIndex = history.length + 1
+    const data:any = await response.json();
+
+    const {messages:serverMessages}:{messages: any[]} = data;
+    const appendMessages:ChatMessage[] = [];
+    for (let i = newMessageIndex; i < serverMessages.length; i++) {
+      const message = serverMessages[i];
+      const appendChatMessage:ChatMessage = {
+        id: generateUUID(),
+        role: message.role,
+        parts: [{ type: "text", text: message.content }],
+        metadata: {
+          createdAt: new Date().toISOString(),
+        },
+      };
+      appendMessages.push(appendChatMessage);
+    }
+    setMessages(prev => [...prev, ...appendMessages]);
+
+    // passed?
+
+    if (data.passed) {
+      console.log(levels)
+      console.log(data.levelId)
+      console.log(levels[1])
+      const nextLevelIndex = parseInt(selectedLevel?.id || '0')
+      console.log(nextLevelIndex)
+      console.log(levels?.[nextLevelIndex])
+      const nextLevel = levels?.[nextLevelIndex];
+      console.log('nextLevel', nextLevel);
+      // open modal with data.pass_rationale
+      
+      setTimeout(()=>{
+        if (nextLevel) {
+          setSelectedLevel(nextLevel);
+          setMessages([]);
         }
-      }
-    },
-  });
+      },5000)
+      toast({
+        type: "success",
+        description: data.pass_rationale,
+      });
+    }
+    
+  };
 
   const searchParams = useSearchParams();
   const query = searchParams.get("query");
 
   const [hasAppendedQuery, setHasAppendedQuery] = useState(false);
 
-  useEffect(() => {
-    if (query && !hasAppendedQuery) {
-      sendMessage({
-        role: "user" as const,
-        parts: [{ type: "text", text: query }],
-      });
-
-      setHasAppendedQuery(true);
-      window.history.replaceState({}, "", `/chat/${id}`);
-    }
-  }, [query, sendMessage, hasAppendedQuery, id]);
-
-  const { data: votes } = useSWR<Vote[]>(
-    messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
-    fetcher
-  );
-
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
 
-  useAutoResume({
-    autoResume,
-    initialMessages,
-    resumeStream,
-    setMessages,
-  });
+  // Handler for level selection that includes userObjective
+  const handleLevelSelect = useCallback((level: { id: string; name: string; difficulty?: string }) => {
+    setSelectedLevel({
+      ...level,
+      userObjective: userObjective || undefined
+    });
+
+    // Also set the objective directly if userObjective is available
+    if (userObjective) {
+      setUserObjective(userObjective);
+    }
+  }, [userObjective]);
+
 
   return (
     <>
@@ -242,7 +258,7 @@ export function Chat({
         <div className="flex w-full flex-col px-4 py-2 gap-8 justify-center items-center">
           <div className="w-full flex justify-center">
             <LevelSelector
-              onLevelSelect={setSelectedLevel}
+              onLevelSelect={handleLevelSelect}
               selectedLevel={selectedLevel}
               className="w-full max-w-xs"
               levels={levels}
@@ -250,7 +266,7 @@ export function Chat({
               error={levelsError}
             />
           </div>
-          <div className="text-center text-sm bg-neutral-900 text-white rounded-full px-4 py-2">
+          <div className="text-center text-sm bg-neutral-900 text-white rounded-full px-4 py-2" data-testid="selected-level-name">
            {selectedLevel?.name}
           </div>
         <div className="flex flex-col min-w-0 max-w-4xl px-4 py-2 gap-4 text-center items-center">
@@ -262,9 +278,10 @@ export function Chat({
               <div className="text-sm text-muted-foreground">Loading objective...</div>
             ) : levelsError ? (
               <div className="text-sm text-red-500">{levelsError}</div>
-            ) : objective ? (
+            ) : selectedLevel?.userObjective ? (
               <div className="text-sm text-center max-w-2xl px-4">
-                {objective}
+                <div className="font-semibold mb-2">User Objective:</div>
+                <div>{selectedLevel.userObjective}</div>
               </div>
             ) : (
               <div className="text-sm text-muted-foreground">Select a level to see the objective</div>
@@ -277,11 +294,11 @@ export function Chat({
           isArtifactVisible={isArtifactVisible}
           isReadonly={isReadonly}
           messages={messages}
-          regenerate={regenerate}
+          regenerate={async() => {}}
           selectedModelId={initialChatModel}
           setMessages={setMessages}
-          status={status}
-          votes={votes}
+          votes={[]}
+          status="ready"
         />
 
         <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
@@ -298,7 +315,7 @@ export function Chat({
               setAttachments={setAttachments}
               setInput={setInput}
               setMessages={setMessages}
-              status={status}
+              status="ready"
               stop={stop}
               usage={usage}
             />
@@ -312,16 +329,16 @@ export function Chat({
         input={input}
         isReadonly={isReadonly}
         messages={messages}
-        regenerate={regenerate}
+        regenerate={async() => {}}
         selectedModelId={currentModelId}
         selectedVisibilityType={visibilityType}
         sendMessage={sendMessage}
         setAttachments={setAttachments}
         setInput={setInput}
         setMessages={setMessages}
-        status={status}
-        stop={stop}
-        votes={votes}
+        status="ready"
+        stop= {async() => {}}
+        votes={[]}
       />
 
       <AlertDialog

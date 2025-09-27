@@ -13,6 +13,7 @@ interface Level {
   id: string;
   name: string;
   difficulty?: string;
+  userObjective?: string;
 }
 
 interface LevelSelectorProps {

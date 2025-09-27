@@ -36,7 +36,14 @@ export async function GET(request: Request) {
     return new ChatSDKError("forbidden:document").toResponse();
   }
 
-  return Response.json(documents, { status: 200 });
+  return Response.json(documents, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
 }
 
 export async function POST(request: Request) {
@@ -81,7 +88,14 @@ export async function POST(request: Request) {
     userId: session.user.id,
   });
 
-  return Response.json(document, { status: 200 });
+  return Response.json(document, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
 }
 
 export async function DELETE(request: Request) {
@@ -122,5 +136,24 @@ export async function DELETE(request: Request) {
     timestamp: new Date(timestamp),
   });
 
-  return Response.json(documentsDeleted, { status: 200 });
+  return Response.json(documentsDeleted, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
+}
+
+// Handle preflight requests
+export async function OPTIONS(request: Request) {
+  return new Response(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
 }

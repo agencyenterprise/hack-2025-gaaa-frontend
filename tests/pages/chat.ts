@@ -47,10 +47,20 @@ export class ChatPage {
     await this.sendButton.click();
   }
 
+  async getSelectedLevelName(): Promise<string> {
+    return await this.page.locator('[data-testid="selected-level-name"]').innerText();
+  }
+
   async isGenerationComplete() {
-    const response = await this.page.waitForResponse((currentResponse) =>
-      currentResponse.url().includes("/api/chat")
-    );
+    const selectedLevelName = await this.getSelectedLevelName();
+    const response = await this.page.waitForResponse((currentResponse) => {
+      const urlIncludesApi = currentResponse.url().includes('/api/levels/');
+      if (urlIncludesApi) {
+        console.log('API URL:', currentResponse.url());
+        console.log('Selected level name:', selectedLevelName);
+      }
+      return urlIncludesApi;
+    });
 
     await response.finished();
   }
