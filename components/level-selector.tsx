@@ -185,7 +185,7 @@ export function LevelSelector({
             </SheetHeader>
             <div className="mt-6 h-full">
               {selectedLevel.readme_content ? (
-                <MarkdownRenderer className="overflow-y-auto h-full">
+                <MarkdownRenderer className="overflow-y-auto h-[calc(100%-100px)] mb-2">
                   {selectedLevel.readme_content}
                 </MarkdownRenderer>
               ) : (
