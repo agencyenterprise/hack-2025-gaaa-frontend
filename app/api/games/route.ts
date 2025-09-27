@@ -37,9 +37,17 @@ export async function GET(request: NextRequest) {
 
     // Extract user_objective and structure the response
     const games = data.games || [];
+    
+    const parsedGames = games.map((game: any) => {
+      return {
+        name: game.id,
+        description: game.name,
+        endpoint: game.endpoint,
+      };
+    });
 
     // Return the structured data with CORS headers
-    return NextResponse.json(games, {
+    return NextResponse.json(parsedGames, {
       status: 200,
       headers: {
         'Access-Control-Allow-Origin': '*',
