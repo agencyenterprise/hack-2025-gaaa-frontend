@@ -278,8 +278,9 @@ export function Chat({
           isReadonly={isReadonly}
           selectedVisibilityType={initialVisibilityType}
         />
-        <div className="flex w-full flex-col px-4 py-2 gap-8 justify-center items-center">
-          <div className="w-full flex flex-col items-center justify-center gap-2">
+        <div className="flex w-full flex-col px-4 py-2 gap-4 justify-center items-center">
+          <div className="flex w-full flex-row gap-2 justify-center">
+          <div className="flex flex-col items-center justify-center gap-2">
             <div className="text-sm text-muted-foreground">Select a game</div>
             <GameSelector
               games={games}
@@ -290,7 +291,7 @@ export function Chat({
               error={gamesError}
             />
           </div>
-          <div className="w-full flex flex-col items-center justify-center gap-2">
+          <div className="flex flex-col items-center justify-center gap-2">
             {selectedGame && <>
             <div className="text-sm text-muted-foreground">Select a level</div>
               <LevelSelector
@@ -305,10 +306,8 @@ export function Chat({
               </>
             }
           </div>
-        <div className="flex flex-col min-w-0 max-w-4xl px-4 py-2 gap-4 text-center items-center">
-          <div className="w-full text-base font-bold flex justify-center">
-            Objective
           </div>
+        <div className="flex flex-col min-w-0 max-w-4xl px-4 py-2 gap-4 text-center items-center">
           <div className="w-full flex justify-center">
             {isLoadingLevels ? (
               <div className="text-sm text-muted-foreground">Loading...</div>
