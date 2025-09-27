@@ -124,10 +124,10 @@ export function GameSelector({
             No levels available
           </SelectItem>
         ) : (
-          games.map((game) => (
+          games.map((game, index  ) => (
             <SelectItem key={game.name} value={game.name}>
               <div className="flex flex-col">
-                <span>{game.description}</span>
+                <span>{index+1}. {game.description}</span>
               </div>
             </SelectItem>
           ))
