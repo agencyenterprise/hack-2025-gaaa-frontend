@@ -280,7 +280,6 @@ export function Chat({
               <div className="text-sm text-red-500">{levelsError}</div>
             ) : selectedLevel?.userObjective ? (
               <div className="text-sm text-center max-w-2xl px-4">
-                <div className="font-semibold mb-2">User Objective:</div>
                 <div>{selectedLevel.userObjective}</div>
               </div>
             ) : (
