@@ -49,8 +49,6 @@ export async function GET(request: NextRequest) {
     // Extract user_objective and structure the response
     const levels = data.levels || [];
 
-    console.log('Levels:', levels);
-
     // Structure the response to include user_objective and levels data
     const structuredData = {
       levels: levels.map((level: any, index: number) => ({
@@ -58,6 +56,7 @@ export async function GET(request: NextRequest) {
         name: level.name || level.title || `Level ${index + 1}`,
         difficulty: level.difficulty || level.level || undefined,
         userObjective: level.user_objective || level.description || undefined,
+        readme_content: level.readme_content || undefined,
       })),
       raw_data: data // Keep raw data for backward compatibility
     };

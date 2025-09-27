@@ -8,12 +8,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { InfoIcon } from "@/components/icons";
+import { MarkdownRenderer } from "@/components/markdown-renderer";
 
 interface Level {
   id: string;
   name: string;
   difficulty?: string;
   userObjective?: string;
+  readme_content?: string;
 }
 
 interface LevelSelectorProps {
@@ -108,46 +120,83 @@ export function LevelSelector({
   };
 
   return (
-    <Select
-      value={selectedLevel?.id || ""}
-      onValueChange={handleLevelChange}
-      disabled={isLoading || levels.length === 0}
-    >
-      <SelectTrigger className={className}>
-        <SelectValue 
-          placeholder={
-            isLoading 
-              ? "Loading levels..." 
-              : error 
-                ? "Error loading levels" 
-                : "Select a level"
-          } 
-        />
-      </SelectTrigger>
-      <SelectContent>
-        {error ? (
-          <SelectItem value="error" disabled>
-            {error}
-          </SelectItem>
-        ) : levels.length === 0 && !isLoading ? (
-          <SelectItem value="no-levels" disabled>
-            No levels available
-          </SelectItem>
-        ) : (
-          levels.map((level) => (
-            <SelectItem key={level.id} value={level.id}>
-              <div className="flex flex-col">
-                <span>{level.name}</span>
-                {level.difficulty && (
-                  <span className="text-xs text-muted-foreground">
-                    {level.difficulty}
-                  </span>
-                )}
-              </div>
+    <div className="flex items-center gap-2">
+      <Select
+        value={selectedLevel?.id || ""}
+        onValueChange={handleLevelChange}
+        disabled={isLoading || levels.length === 0}
+      >
+        <SelectTrigger className={className}>
+          <SelectValue 
+            placeholder={
+              isLoading 
+                ? "Loading levels..." 
+                : error 
+                  ? "Error loading levels" 
+                  : "Select a level"
+            } 
+          />
+        </SelectTrigger>
+        <SelectContent>
+          {error ? (
+            <SelectItem value="error" disabled>
+              {error}
             </SelectItem>
-          ))
-        )}
-      </SelectContent>
-    </Select>
+          ) : levels.length === 0 && !isLoading ? (
+            <SelectItem value="no-levels" disabled>
+              No levels available
+            </SelectItem>
+          ) : (
+            levels.map((level) => (
+              <SelectItem key={level.id} value={level.id}>
+                <div className="flex flex-col">
+                  <span>{level.name}</span>
+                  {level.difficulty && (
+                    <span className="text-xs text-muted-foreground">
+                      {level.difficulty}
+                    </span>
+                  )}
+                </div>
+              </SelectItem>
+            ))
+          )}
+        </SelectContent>
+      </Select>
+      
+      {selectedLevel && (
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              type="button"
+            >
+              <InfoIcon size={16} />
+              <span className="sr-only">Show level information</span>
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-[500px] md:w-[640px]">
+            <SheetHeader>
+              <SheetTitle>{selectedLevel.name}</SheetTitle>
+              <SheetDescription>
+                Level information
+              </SheetDescription>
+            </SheetHeader>
+            <div className="mt-6 h-full">
+              {selectedLevel.readme_content ? (
+                <MarkdownRenderer className="overflow-y-auto h-full">
+                  {selectedLevel.readme_content}
+                </MarkdownRenderer>
+              ) : (
+                <p className="text-muted-foreground">
+                  No additional help information is available for this level.
+                </p>
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
+    </div>
   );
 }

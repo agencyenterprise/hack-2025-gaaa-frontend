@@ -144,10 +144,11 @@ export function Chat({
           name: level.name || level.title || `Level ${index + 1}`,
           difficulty: level.difficulty || level.level || undefined,
           userObjective: level.userObjective || level.description || undefined,
+          readme_content: level.readme_content || undefined,
         }));
 
         setLevelsData(formattedLevels);
-        console.log('Formatted levels:', formattedLevels);
+
         // Auto-select first level if available
         if (formattedLevels.length > 0 && !selectedLevel) {
           const firstLevel = formattedLevels[0];
@@ -163,8 +164,9 @@ export function Chat({
         setIsLoadingLevels(false);
       }
     };
-
-    fetchLevels();
+    if (selectedGame) {
+      fetchLevels();
+    }
   }, [selectedGame]);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -256,7 +258,8 @@ export function Chat({
           selectedVisibilityType={initialVisibilityType}
         />
         <div className="flex w-full flex-col px-4 py-2 gap-8 justify-center items-center">
-          <div className="w-full flex justify-center">
+          <div className="w-full flex flex-col items-center justify-center gap-2">
+            <div className="text-sm text-muted-foreground">Select a game</div>
             <GameSelector
               games={games}
               onGameSelect={(game)=>{setSelectedGame(game); setSelectedLevel(undefined)}}
@@ -266,8 +269,9 @@ export function Chat({
               error={gamesError}
             />
           </div>
-          <div className="w-full flex justify-center">
-            {selectedGame && 
+          <div className="w-full flex flex-col items-center justify-center gap-2">
+            {selectedGame && <>
+            <div className="text-sm text-muted-foreground">Select a level</div>
               <LevelSelector
                 gameName={selectedGame.name}
                 onLevelSelect={handleLevelSelect}
@@ -277,10 +281,8 @@ export function Chat({
                 isLoading={isLoadingLevels}
                 error={levelsError}
               />
+              </>
             }
-          </div>
-          <div className="text-center text-sm bg-neutral-900 text-white rounded-full px-4 py-2" data-testid="selected-level-name">
-           {selectedLevel?.name}
           </div>
         <div className="flex flex-col min-w-0 max-w-4xl px-4 py-2 gap-4 text-center items-center">
           <div className="w-full text-base font-bold flex justify-center">
@@ -288,7 +290,7 @@ export function Chat({
           </div>
           <div className="w-full flex justify-center">
             {isLoadingLevels ? (
-              <div className="text-sm text-muted-foreground">Loading objective...</div>
+              <div className="text-sm text-muted-foreground">Loading...</div>
             ) : levelsError ? (
               <div className="text-sm text-red-500">{levelsError}</div>
             ) : selectedLevel?.userObjective ? (
