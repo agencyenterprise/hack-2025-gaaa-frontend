@@ -310,7 +310,7 @@ function PureMultimodalInput({
           />{" "}
           <Context {...contextProps} />
         </div>
-        <PromptInputToolbar className="!border-top-0 border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
+        <PromptInputToolbar className="flex !border-top-0 justify-end border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
           {status === "submitted" ? (
             <StopButton setMessages={setMessages} stop={stop} />
           ) : (
