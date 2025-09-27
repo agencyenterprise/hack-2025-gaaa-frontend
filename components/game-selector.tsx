@@ -114,7 +114,7 @@ export function GameSelector({
           } 
         />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="max-h-[300px] overflow-y-auto">
         {error ? (
           <SelectItem value="error" disabled>
             {error}
