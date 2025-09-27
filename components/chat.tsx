@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, UIMessage } from "ai";
+import { DefaultChatTransport, UIMessage, type ChatStatus } from "ai";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
@@ -72,6 +72,9 @@ export function Chat({
   const [isLoadingGames, setIsLoadingGames] = useState(false);
   const [levelsError, setLevelsError] = useState<string | null>(null);
   const [gamesError, setGamesError] = useState<string | null>(null);
+  const [status, setStatus] = useState<ChatStatus>("ready");
+  const [showLevelCompleteModal, setShowLevelCompleteModal] = useState(false);
+  const [completionData, setCompletionData] = useState<{ message: string; nextLevel?: any } | null>(null);
 
   // Memoize the levels array to prevent unnecessary re-renders
   const levels = useMemo(() => levelsData, [levelsData]);
@@ -170,71 +173,86 @@ export function Chat({
   }, [selectedGame]);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const stop = async () => {
+    // setStatus("ready");
+  };
+
   const sendMessage = async(message?: any) => {
-    const messageText = message.parts[0].text;
-    const chatMessage:ChatMessage = {
-      id: generateUUID(),
-      role: message.role,
-      parts: [{ type: "text", text: messageText }],
-      metadata: {
-        createdAt: new Date().toISOString(),
-      },
-    };
-    setMessages([...messages, chatMessage]);
-
-    const history = messages.map((message) => ({
-      id: message.id,
-      content: (message as any).parts[0].text || '',
-      role: message.role,
-    }));
-    const response = await fetch('/api/chat/', {
-      method: 'POST',
-      body: JSON.stringify({
-        id,
-        history,
-        message: messageText,
-        levelId: selectedLevel?.id,
-        game: selectedGame?.name,
-      }),
-    });
-    const newMessageIndex = history.length + 1
-    const data:any = await response.json();
-
-    const {messages:serverMessages}:{messages: any[]} = data;
-    const appendMessages:ChatMessage[] = [];
-    for (let i = newMessageIndex; i < serverMessages.length; i++) {
-      const message = serverMessages[i];
-      const appendChatMessage:ChatMessage = {
+    try {
+      setStatus("submitted");
+      const messageText = message.parts[0].text;
+      const chatMessage:ChatMessage = {
         id: generateUUID(),
         role: message.role,
-        parts: [{ type: "text", text: message.content }],
+        parts: [{ type: "text", text: messageText }],
         metadata: {
           createdAt: new Date().toISOString(),
         },
       };
-      appendMessages.push(appendChatMessage);
-    }
-    setMessages(prev => [...prev, ...appendMessages]);
+      setMessages([...messages, chatMessage]);
 
-    // passed?
-
-    if (data.passed) {
-      const nextLevelIndex = parseInt(selectedLevel?.id || '0')
-      const nextLevel = levels?.[nextLevelIndex];
-      // open modal with data.pass_rationale
+      const history = messages.map((message) => ({
+        id: message.id,
+        content: (message as any).parts[0].text || '',
+        role: message.role,
+      }));
+      const response = await fetch('/api/chat/', {
+        method: 'POST',
+        body: JSON.stringify({
+          id,
+          history,
+          message: messageText,
+          levelId: selectedLevel?.id,
+          game: selectedGame?.name,
+        }),
+      });
       
-      setTimeout(()=>{
-        if (nextLevel) {
-          setSelectedLevel(nextLevel);
-          setMessages([]);
-        }
-      },5000)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const newMessageIndex = history.length + 1
+      const data:any = await response.json();
+
+      const {messages:serverMessages}:{messages: any[]} = data;
+      const appendMessages:ChatMessage[] = [];
+      for (let i = newMessageIndex; i < serverMessages.length; i++) {
+        const message = serverMessages[i];
+        const appendChatMessage:ChatMessage = {
+          id: generateUUID(),
+          role: message.role,
+          parts: [{ type: "text", text: message.content }],
+          metadata: {
+            createdAt: new Date().toISOString(),
+          },
+        };
+        appendMessages.push(appendChatMessage);
+      }
+      setMessages(prev => [...prev, ...appendMessages]);
+
+      // Set status back to ready when message processing is complete
+      setStatus("ready");
+
+      // passed?
+
+      if (data.passed) {
+        const nextLevelIndex = parseInt(selectedLevel?.id || '0')
+        const nextLevel = levels?.[nextLevelIndex];
+        
+        setCompletionData({
+          message: data.pass_rationale,
+          nextLevel: nextLevel
+        });
+        setShowLevelCompleteModal(true);
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setStatus("ready");
       toast({
-        type: "success",
-        description: data.pass_rationale,
+        type: "error",
+        description: "Failed to send message. Please try again.",
       });
     }
-    
   };
 
   const searchParams = useSearchParams();
@@ -246,6 +264,9 @@ export function Chat({
   // Handler for level selection that includes userObjective
   const handleLevelSelect = useCallback((level: { id: string; name: string; difficulty?: string }) => {
     setSelectedLevel(level);
+    setMessages([]);
+    setCompletionData(null);
+    setShowLevelCompleteModal(false);
   }, []);
 
 
@@ -312,7 +333,7 @@ export function Chat({
           selectedModelId={initialChatModel}
           setMessages={setMessages}
           votes={[]}
-          status="ready"
+          status={status}
         />
 
         <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
@@ -329,7 +350,7 @@ export function Chat({
               setAttachments={setAttachments}
               setInput={setInput}
               setMessages={setMessages}
-              status="ready"
+              status={status}
               stop={stop}
               usage={usage}
             />
@@ -350,8 +371,8 @@ export function Chat({
         setAttachments={setAttachments}
         setInput={setInput}
         setMessages={setMessages}
-        status="ready"
-        stop= {async() => {}}
+        status={status}
+        stop= {stop}
         votes={[]}
       />
 
@@ -381,6 +402,42 @@ export function Chat({
             >
               Activate
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        onOpenChange={setShowLevelCompleteModal}
+        open={showLevelCompleteModal}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>🎉 Level Complete!</AlertDialogTitle>
+            <AlertDialogDescription>
+              {completionData?.message}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setShowLevelCompleteModal(false);
+                setCompletionData(null);
+              }}
+            >
+              Stay Here
+            </AlertDialogCancel>
+            {completionData?.nextLevel && (
+              <AlertDialogAction
+                onClick={() => {
+                  setSelectedLevel(completionData.nextLevel);
+                  setMessages([]);
+                  setShowLevelCompleteModal(false);
+                  setCompletionData(null);
+                }}
+              >
+                Next Level
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
